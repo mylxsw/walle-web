@@ -1,8 +1,8 @@
 <?php
 // Merged web + local configuration is available in $web
 $params = [
-    'version'   => 'v1.1.1',
-    'buildTime' => '2016-04-12',
+    'version'   => 'v1.2.0',
+    'buildTime' => '2016-05-16',
 ];
 return [
     'id'                  => 'console',

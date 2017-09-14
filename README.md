@@ -45,7 +45,7 @@ Installation
 ```
 git clone git@github.com:meolu/walle-web.git
 cd walle-web
-vi config/web.php # set up module db mysql connection info
+vi config/local.php # set up module db mysql connection info
 composer install  # error cause by bower-asset, install：composer global require "fxp/composer-asset-plugin:*"
 ./yii walle/setup # init walle
 ```
@@ -88,7 +88,7 @@ you would like to adjust some params to make walle suited for your company.
         ],
         'messageConfig' => [
             'charset' => 'UTF-8',
-            'from'    => ['service@huamanshu.com' => '花满树出品'],  // the same with username of mail module in config/web.php
+            'from'    => ['service@huamanshu.com' => '花满树出品'], 
         ],
     ```
 
@@ -101,9 +101,9 @@ you would like to adjust some params to make walle suited for your company.
 
 * Configure language
     ```php
-    vi config/web.php +73
+    vi config/local.php
 
-    'language'   => 'en',  # zh => 中文,  en => English
+    'language'   => 'en',  // zh-CN => 中文,  en => English
     ```
 
 
@@ -158,3 +158,7 @@ Discussing
 ----------
 - [submit issue](https://github.com/meolu/walle-web/issues/new)
 - email: wushuiyong@huamanshu.com
+
+勾搭下
+--------
+<img src="https://raw.githubusercontent.com/meolu/walle-web/feature-weixin/docs/weixin.wushuiyong.jpg" width="244" height="314" alt="吴水永微信" align=left />

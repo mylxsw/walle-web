@@ -12,9 +12,9 @@ use yii\widgets\ActiveForm;
     <div class="box-body">
         <?= $form->field($conf, 'name')
             ->textInput([
-                'class'          => 'col-xs-11',
+                'class'          => 'col-sm-11',
             ])
-            ->label(yii::t('conf', 'name'), ['class' => 'text-right bolder blue col-xs-1']) ?>
+            ->label(yii::t('conf', 'name'), ['class' => 'text-right bolder blue col-sm-1']) ?>
 
         <div class="clearfix"></div>
         <?= $form->field($conf, 'level')->dropDownList([
@@ -22,8 +22,8 @@ use yii\widgets\ActiveForm;
             Project::LEVEL_SIMU => \Yii::t('w', 'conf_level_' . Project::LEVEL_SIMU),
             Project::LEVEL_PROD => \Yii::t('w', 'conf_level_' . Project::LEVEL_PROD),
         ],[
-            'class'          => 'col-xs-11',])
-            ->label(yii::t('conf', 'env'), ['class' => 'text-right bolder blue col-xs-1']) ?>
+            'class'          => 'col-sm-11',])
+            ->label(yii::t('conf', 'env'), ['class' => 'text-right bolder blue col-sm-1']) ?>
         <div class="clearfix"></div>
         <?php if (empty($_GET['projectId'])) { ?>
         <div class="widget-box transparent" id="recent-box" style="margin-top:15px">
@@ -48,27 +48,27 @@ use yii\widgets\ActiveForm;
         <!-- 地址 配置-->
         <?= $form->field($conf, 'repo_url')
             ->textInput([
-                'class'          => 'col-xs-11',
+                'class'          => 'col-sm-11',
                 'placeholder'    => 'git@github.com:meolu/walle-web.git',
                 'data-placement' => 'top',
                 'data-rel'       => 'tooltip',
                 'data-title'     => yii::t('conf', 'repo url tip'),
             ])
-            ->label(yii::t('conf', 'url'), ['class' => 'text-right bolder blue col-xs-1']) ?>
+            ->label(yii::t('conf', 'url'), ['class' => 'text-right bolder blue col-sm-1']) ?>
         <!-- 地址 配置 end-->
         <div class="clearfix"></div>
         <?php if (empty($_GET['projectId']) || $conf->repo_type == Project::REPO_SVN) { ?>
         <div class="username-password" style="<?= empty($_GET['projectId']) ? 'display:none' : '' ?>">
         <?= $form->field($conf, 'repo_username')
             ->textInput([
-                'class'          => 'col-xs-3',
+                'class'          => 'col-sm-3',
             ])
-            ->label(yii::t('conf', 'username'), ['class' => 'text-right bolder blue col-xs-1']) ?>
+            ->label(yii::t('conf', 'username'), ['class' => 'text-right bolder blue col-sm-1']) ?>
         <?= $form->field($conf, 'repo_password')
             ->passwordInput([
-                'class'          => 'col-xs-3',
+                'class'          => 'col-sm-3',
             ])
-            ->label(yii::t('conf', 'password'), ['class' => 'text-right bolder blue col-xs-1']); ?>
+            ->label(yii::t('conf', 'password'), ['class' => 'text-right bolder blue col-sm-1']); ?>
         </div>
         <div class="clearfix"></div>
 
@@ -106,10 +106,11 @@ use yii\widgets\ActiveForm;
                               ['class' => 'text-right bolder']) ?>
                       <?= $form->field($conf, 'excludes')
                           ->textarea([
-                              'placeholder'    => '.git' . PHP_EOL . 'README.md',
+                              'placeholder'    => ".git\n.svn\nREADME.md",
                               'data-placement' => 'top',
                               'data-rel'       => 'tooltip',
                               'data-title'     => yii::t('conf', 'excludes tip'),
+                              'rows'           => 10,
                           ])
                           ->label(yii::t('conf', 'excludes'), ['class' => 'text-right bolder']) ?>
                   </div>
@@ -175,6 +176,7 @@ use yii\widgets\ActiveForm;
                               'data-placement' => 'top',
                               'data-rel'       => 'tooltip',
                               'data-title'     => yii::t('conf', 'servers tip'),
+                              'rows'           => 5,
                           ])
                           ->label(yii::t('conf', 'servers').'<small><i class="light-blue icon-asterisk"></i></small>',
                               ['class' => 'text-right bolder']) ?>
@@ -266,15 +268,22 @@ use yii\widgets\ActiveForm;
             </label>
             <div class="radio" style="display: inline;" data-rel="tooltip" data-title="<?= yii::t('conf', 'branch tip') ?>" data-placement="right">
                 <label>
-                    <input name="Project[repo_mode]" value="<?= Project::REPO_BRANCH ?>" <?= $conf->repo_mode == Project::REPO_BRANCH ? 'checked' : '' ?> type="radio" checked class="ace">
+                    <input name="Project[repo_mode]" value="<?= Project::REPO_MODE_BRANCH ?>" <?= $conf->repo_mode == Project::REPO_MODE_BRANCH ? 'checked="checked"' : '' ?> type="radio" class="ace">
                     <span class="lbl"> branch </span>
                 </label>
             </div>
 
             <div class="radio" style="display: inline;" data-rel="tooltip" data-title="<?= yii::t('conf', 'tag tip') ?>" data-placement="right">
                 <label>
-                    <input name="Project[repo_mode]" value="<?= Project::REPO_TAG ?>" <?= $conf->repo_mode == Project::REPO_TAG ? 'checked' : '' ?> type="radio" class="ace">
+                    <input name="Project[repo_mode]" value="<?= Project::REPO_MODE_TAG ?>" <?= $conf->repo_mode == Project::REPO_MODE_TAG ? 'checked="checked"' : '' ?> type="radio" class="ace">
                     <span class="lbl"> tag </span>
+                </label>
+            </div>
+
+            <div id="div-repo_mode_nontrunk" class="radio" style="display: <?php if ($conf->repo_type == Project::REPO_SVN) { echo 'inline';} else {echo 'none';} ?>;" data-rel="tooltip" data-title="<?= yii::t('conf', 'nontrunk tip') ?>" data-placement="right">
+                <label>
+                    <input name="Project[repo_mode]" value="<?= Project::REPO_MODE_NONTRUNK ?>" <?= $conf->repo_mode == Project::REPO_MODE_NONTRUNK ? 'checked="checked"' : '' ?> type="radio" class="ace">
+                    <span class="lbl"><?= yii::t('conf', 'nontrunk') ?></span>
                 </label>
             </div>
         </div>
@@ -322,11 +331,13 @@ use yii\widgets\ActiveForm;
         $('[data-rel=popover]').popover({container:'body'});
         $('.show-git').click(function() {
             $('.username-password').hide();
-            $('#project-repo_type').val('git')
-        })
+            $('#project-repo_type').val('git');
+            $('#div-repo_mode_nontrunk').hide();
+        });
         $('.show-svn').click(function() {
             $('.username-password').show();
-            $('#project-repo_type').val('svn')
-        })
+            $('#project-repo_type').val('svn');
+            $('#div-repo_mode_nontrunk').css({'display': 'inline'});
+        });
     });
 </script>

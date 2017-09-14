@@ -4,6 +4,7 @@ return [
     'md5 title' => '线上文件指纹',
     'file' => '文件',
     'file placeholder' => '项目的相对地址：backend/web/index.php',
+    'file project' => '项目名称',
     'project' => '项目',
     'file md5' => '查询文件md5',
     'error todo' => '请联系SA或者重新部署',
@@ -29,6 +30,8 @@ return [
     'pre deploy task error' => '代码检出前置任务操作失败',
     'post deploy task error' => '代码检出后置任务操作失败',
     'rsync error' => '同步文件到目标服务器群出错',
+    'package error' => '打包文件出错, 请确认文件列表填写正确',
+    'unpackage error' => '目标机解压文件出错',
     'project configuration works' => '配置检测通过，恭喜：）',
     'update servers error' => '全量更新服务器出错',
     'ssh-key to git' => '把php进程用户{user}的ssh-key加入git的deploy-keys列表',
@@ -49,4 +52,12 @@ return [
     'get tags failed' => '获取tag列表失败：',
     'unknown scm' => '未知的版本管理',
 
+    'login type could not support' => '{loginType} 登录方式不支持',
+    'the login type does not provide security' => '{loginType} 登录方式不提供找回密码',
+    'the login type does not provide registration' => '{loginType} 登录方式不提供注册',
+    'the login dirver configs does not defined' => '{loginType} 配置未定义',
+    'the login dirver configs parse error' => '{loginType} 配置解析出错',
+    'illegal service port' => '非法的 {service} 端口：{port}',
+    'account base dn could not defined' => 'Account base DN 未定义',
+    'account pattern could not defined' => '用户搜索模式未定义'
 ];

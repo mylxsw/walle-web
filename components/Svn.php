@@ -24,18 +24,20 @@ class Svn extends Command {
     public function updateRepo($branch = 'trunk', $svnDir = null) {
         $svnDir = $svnDir ?: Project::getDeployFromDir();
         $dotSvn = rtrim($svnDir, '/') . '/.svn';
-        // 存在svn目录，直接update
+
         if (file_exists($dotSvn)) {
+            // 存在svn目录，直接update
             $cmd[] = sprintf('cd %s ', $svnDir);
-            $cmd[] = $this->_getSvnCmd('svn up -q');
+            $cmd[] = $this->_getSvnCmd('svn cleanup');
+            $cmd[] = $this->_getSvnCmd('svn revert . -q -R');
+            $cmd[] = $this->_getSvnCmd('svn up -q --force');
             $command = join(' && ', $cmd);
             return $this->runLocalCommand($command);
-        }
-        // 不存在，则先checkout
-        else {
+        } else {
+            // 不存在，则先checkout
             $cmd[] = sprintf('mkdir -p %s ', $svnDir);
             $cmd[] = sprintf('cd %s ', $svnDir);
-            $cmd[] = $this->_getSvnCmd(sprintf('svn checkout -q %s .', $this->getConfig()->repo_url));
+            $cmd[] = $this->_getSvnCmd(sprintf('svn checkout -q %s .', escapeshellarg($this->getConfig()->repo_url)));
             $command = join(' && ', $cmd);
             return $this->runLocalCommand($command);
         }
@@ -49,30 +51,11 @@ class Svn extends Command {
      */
     public function updateToVersion(TaskModel $task) {
 
-        // 兼容无trunk、无branches、无tags下为空
-        $branch = ($task->branch == 'trunk' || $task->branch == '')
-            ? $task->branch
-            : ($this->getConfig()->repo_mode == Project::REPO_BRANCH ? 'branches/' : 'tags/') . $task->branch;
         // 先更新
-        $versionSvnDir = sprintf('%s-svn', rtrim(Project::getDeployWorkspace($task->link_id), '/'));
+        $versionSvnDir = rtrim(Project::getDeployWorkspace($task->link_id), '/');
         $cmd[] = sprintf('cd %s ', $versionSvnDir);
-        $cmd[] = $this->_getSvnCmd(sprintf('svn checkout -q %s/%s .', $this->getConfig()->repo_url, $branch));
-        // 更新指定文件到指定版本，并复制到同步目录
-        $fileAndVersion = $this->getFileAndVersionList($task);
-        foreach ($fileAndVersion as $assign) {
-            if (in_array($assign['file'], ['.', '..'])) continue;
-            $cmd[] = $this->_getSvnCmd(sprintf('svn up -q %s %s',
-                $assign['file'],
-                empty($assign['version']) ? '' : ' -r ' . $assign['version']
-            ));
-            // 多层目录需要先新建父目录，否则复制失败
-            if (strpos($assign['file'], '/') !== false) {
-                $cmd[] = sprintf('mkdir -p %s/%s',
-                    Project::getDeployWorkspace($task->link_id), dirname($assign['file']));
-            }
-            $cmd[] = sprintf('cp -rf %s %s/%s',
-                rtrim($assign['file'], '/'), Project::getDeployWorkspace($task->link_id), dirname($assign['file']));
-        }
+        $cmd[] = $this->_getSvnCmd(sprintf('svn up -q --force -r %d', $task->commit_id));
+
         $command = join(' && ', $cmd);
 
         return $this->runLocalCommand($command);
@@ -90,7 +73,7 @@ class Svn extends Command {
         $list = [];
         $branchDir = 'tags';
         // 分支模式
-        if ($this->getConfig()->repo_mode == Project::REPO_BRANCH) {
+        if ($this->getConfig()->repo_mode == Project::REPO_MODE_BRANCH) {
             $branchDir = 'branches';
             $trunkDir  = sprintf("%s/trunk", rtrim(Project::getDeployFromDir(), '/'));
 
@@ -141,7 +124,7 @@ class Svn extends Command {
         // 先更新
         $destination = Project::getDeployFromDir();
         $this->updateRepo($branch, $destination);
-        $cmd[] = sprintf('cd %s ', static::getBranchDir($branch, $this->getConfig()->repo_mode == Project::REPO_TAG ?: false));
+        $cmd[] = sprintf('cd %s ', static::getBranchDir($branch, $this->getConfig()));
         $cmd[] = $this->_getSvnCmd('svn log --xml -l ' . $count);
         $command = join(' && ', $cmd);
         $result = $this->runLocalCommand($command);
@@ -198,7 +181,7 @@ class Svn extends Command {
         // 先更新
         $destination = Project::getDeployFromDir();
         $this->updateRepo($branch, $destination);
-        $cmd[] = sprintf('cd %s ', static::getBranchDir($branch, $this->getConfig()->repo_mode == Project::REPO_TAG ?: false));
+        $cmd[] = sprintf('cd %s ', static::getBranchDir($branch, $this->getConfig()));
         $cmd[] = $this->_getSvnCmd(sprintf('svn diff -r %d:%d --summarize', $star, $end));
         $command = join(' && ', $cmd);
         $result = $this->runLocalCommand($command);
@@ -252,51 +235,26 @@ class Svn extends Command {
     }
 
     /**
+     * 获取svn分支目录
      * @param $branch
-     * @param bool $tag
+     * @param Project $project
      * @return string
      */
-    public static function getBranchDir($branch, $tag = false) {
+    public static function getBranchDir($branch, Project $project) {
+
         $svnDir = Project::getDeployFromDir();
-        // 兼容无trunk、无branches、无tags下为空
-        $branchDir = ($branch == '' || $branch == 'trunk') && !$tag
-            ? $branch
-            : ($tag ? 'tags/'.$branch : 'branches/'.$branch);
-        return sprintf('%s/%s', $svnDir, $branchDir);
-    }
-
-    /**
-     * 根据任务里提交的带版本号的文件列表, 过滤生成 tar/rysnc 等命令需要的文件列表参数
-     *
-     * @param TaskModel $task
-     * @return string
-     */
-    public function getCommandFiles(TaskModel $task) {
-        $fileList = GlobalHelper::str2arr($task->file_list);
-        $files = '';
-        foreach ($fileList as $file) {
-            list($file, $version) = array_pad(StringHelper::explode($file, ' ', true, true), 2, null);
-            $files .= trim($file) . ' ';
+        if ($project->repo_mode == Project::REPO_MODE_NONTRUNK) {
+            return $svnDir;
+        } elseif ($branch == 'trunk') {
+            return sprintf('%s/trunk', $svnDir);
+        } elseif ($project->repo_mode == Project::REPO_MODE_BRANCH) {
+            return sprintf('%s/branches/%s', $svnDir, $branch);
+        } elseif ($project->repo_mode == Project::REPO_MODE_TAG) {
+            return sprintf('%s/tags/%s', $svnDir, $branch);
+        } else {
+            throw new \InvalidArgumentException('error');
         }
 
-        return trim($files);
-    }
-
-    /**
-     * 获取文件和版本号列表
-     *
-     * @param TaskModel $task
-     * @return array
-     */
-    public function getFileAndVersionList(TaskModel $task) {
-        $fileList = GlobalHelper::str2arr($task->file_list);
-        $fileAndVersion = [];
-        foreach ($fileList as $file) {
-            list($file, $version) = array_pad(StringHelper::explode($file, ' ', true, true), 2, null);
-            $fileAndVersion[] = ['file' => $file, 'version' => $version];
-        }
-
-        return $fileAndVersion;
     }
 
     /**
@@ -304,7 +262,7 @@ class Svn extends Command {
      * @return string
      */
     private function _getSvnCmd($cmd) {
-        return sprintf('/usr/bin/env %s --username=%s --password=%s --non-interactive --trust-server-cert',
+        return sprintf('/usr/bin/env LC_ALL=en_US.UTF-8 %s --username=%s --password=%s --non-interactive --trust-server-cert',
             $cmd, escapeshellarg($this->config->repo_username), escapeshellarg($this->config->repo_password));
     }
 

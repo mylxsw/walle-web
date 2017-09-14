@@ -16,12 +16,12 @@ use app\components\Folder;
 use app\components\Repo;
 use app\components\Task as WalleTask;
 use app\models\Project;
+use app\models\Group;
 use app\models\Record;
-use app\models\Task;
+use app\models\Task as TaskModel;
 use yii;
-use yii\data\Pagination;
-
-class WalleController extends Controller {
+class WalleController extends Controller
+{
 
     /**
      * 项目配置
@@ -50,18 +50,18 @@ class WalleController extends Controller {
 
     public $enableCsrfValidation = false;
 
-
     /**
      * 发起上线
      *
      * @throws \Exception
      */
-    public function actionStartDeploy() {
+    public function actionStartDeploy()
+    {
         $taskId = \Yii::$app->request->post('taskId');
         if (!$taskId) {
             $this->renderJson([], -1, yii::t('walle', 'deployment id is empty'));
         }
-        $this->task = Task::findOne($taskId);
+        $this->task = TaskModel::findOne($taskId);
         if (!$this->task) {
             throw new \Exception(yii::t('walle', 'deployment id not exists'));
         }
@@ -69,7 +69,7 @@ class WalleController extends Controller {
             throw new \Exception(yii::t('w', 'you are not master of project'));
         }
         // 任务失败或者审核通过时可发起上线
-        if (!in_array($this->task->status, [Task::STATUS_PASS, Task::STATUS_FAILED])) {
+        if (!in_array($this->task->status, [TaskModel::STATUS_PASS, TaskModel::STATUS_FAILED])) {
             throw new \Exception(yii::t('walle', 'deployment only done for once'));
         }
         // 清除历史记录
@@ -77,10 +77,10 @@ class WalleController extends Controller {
 
         // 项目配置
         $this->conf = Project::getConf($this->task->project_id);
-        $this->walleTask   = new WalleTask($this->conf);
+        $this->walleTask = new WalleTask($this->conf);
         $this->walleFolder = new Folder($this->conf);
         try {
-            if ($this->task->action == Task::ACTION_ONLINE) {
+            if ($this->task->action == TaskModel::ACTION_ONLINE) {
                 $this->_makeVersion();
                 $this->_initWorkspace();
                 $this->_preDeploy();
@@ -98,14 +98,14 @@ class WalleController extends Controller {
 
             // 记录此次上线的版本（软链号）和上线之前的版本
             ///对于回滚的任务不记录线上版本
-            if ($this->task->action == Task::ACTION_ONLINE) {
+            if ($this->task->action == TaskModel::ACTION_ONLINE) {
                 $this->task->ex_link_id = $this->conf->version;
             }
             // 第一次上线的任务不能回滚、回滚的任务不能再回滚
-            if ($this->task->action == Task::ACTION_ROLLBACK || $this->task->id == 1) {
-                $this->task->enable_rollback = Task::ROLLBACK_FALSE;
+            if ($this->task->action == TaskModel::ACTION_ROLLBACK || $this->task->id == 1) {
+                $this->task->enable_rollback = TaskModel::ROLLBACK_FALSE;
             }
-            $this->task->status = Task::STATUS_DONE;
+            $this->task->status = TaskModel::STATUS_DONE;
             $this->task->save();
 
             // 可回滚的版本设置
@@ -115,7 +115,7 @@ class WalleController extends Controller {
             $this->conf->version = $this->task->link_id;
             $this->conf->save();
         } catch (\Exception $e) {
-            $this->task->status = Task::STATUS_FAILED;
+            $this->task->status = TaskModel::STATUS_FAILED;
             $this->task->save();
             // 清理本地部署空间
             $this->_cleanUpLocal($this->task->link_id);
@@ -125,14 +125,24 @@ class WalleController extends Controller {
         $this->renderJson([]);
     }
 
-
     /**
      * 提交任务
      *
      * @return string
      */
-    public function actionCheck() {
-        $projects = Project::find()->asArray()->all();
+    public function actionCheck()
+    {
+        $projectTable = Project::tableName();
+        $groupTable = Group::tableName();
+        $projects = Project::find()
+                           ->leftJoin(Group::tableName(), "`$groupTable`.`project_id` = `$projectTable`.`id`")
+                           ->where([
+                               "`$projectTable`.status" => Project::STATUS_VALID,
+                               "`$groupTable`.`user_id`" => $this->uid
+                           ])
+                           ->asArray()
+                           ->all();
+
         return $this->render('check', [
             'projects' => $projects,
         ]);
@@ -143,7 +153,8 @@ class WalleController extends Controller {
      *
      * @return string
      */
-    public function actionDetection($projectId) {
+    public function actionDetection($projectId)
+    {
         $project = Project::getConf($projectId);
         $log = [];
         $code = 0;
@@ -154,9 +165,9 @@ class WalleController extends Controller {
 
             // 1.检测宿主机检出目录是否可读写
             $codeBaseDir = Project::getDeployFromDir();
-            $isWritable  = is_dir($codeBaseDir) ? is_writable($codeBaseDir) : @mkdir($codeBaseDir, 0755, true);
+            $isWritable = is_dir($codeBaseDir) ? is_writable($codeBaseDir) : @mkdir($codeBaseDir, 0755, true);
             if (!$isWritable) {
-                $code  = -1;
+                $code = -1;
                 $log[] = yii::t('walle', 'hosted server is not writable error', [
                     'user' => getenv("USER"),
                     'path' => $project->deploy_from,
@@ -166,10 +177,9 @@ class WalleController extends Controller {
             // 2.检测宿主机ssh是否加入git信任
             $ret = $revision->updateRepo();
             if (!$ret) {
-                $code  = -1;
-                $error = $project->repo_type == Project::REPO_GIT
-                    ? yii::t('walle', 'ssh-key to git', ['user' => getenv("USER")])
-                    : yii::t('walle', 'correct username passwd');
+                $code = -1;
+                $error = $project->repo_type == Project::REPO_GIT ? yii::t('walle', 'ssh-key to git',
+                    ['user' => getenv("USER")]) : yii::t('walle', 'correct username passwd');
                 $log[] = yii::t('walle', 'hosted server ssh error', [
                     'error' => $error,
                 ]);
@@ -184,9 +194,7 @@ class WalleController extends Controller {
                     $code = -1;
                     $log[] = yii::t('walle', 'hosted server ansible error');
                 }
-
             }
-
         } catch (\Exception $e) {
             $code = -1;
             $log[] = yii::t('walle', 'hosted server sys error', [
@@ -203,9 +211,9 @@ class WalleController extends Controller {
             if (!$ret) {
                 $code = -1;
                 $log[] = yii::t('walle', 'target server ssh error', [
-                    'local_user'  => getenv("USER"),
+                    'local_user' => getenv("USER"),
                     'remote_user' => $project->release_user,
-                    'path'        => $project->release_to,
+                    'path' => $project->release_to,
                 ]);
             }
 
@@ -226,7 +234,7 @@ class WalleController extends Controller {
                 $code = -1;
                 $log[] = yii::t('walle', 'target server is not writable error', [
                     'remote_user' => $project->release_user,
-                    'path'        => $project->release_to,
+                    'path' => $project->release_library,
                 ]);
             }
 
@@ -243,8 +251,8 @@ class WalleController extends Controller {
         // 7.路径必须为绝对路径
         $needAbsoluteDir = [
             Yii::t('conf', 'deploy from') => Project::getConf()->deploy_from,
-            Yii::t('conf', 'webroot')     => Project::getConf()->release_to,
-            Yii::t('conf', 'releases')    => Project::getConf()->release_library,
+            Yii::t('conf', 'webroot') => Project::getConf()->release_to,
+            Yii::t('conf', 'releases') => Project::getConf()->release_library,
         ];
         foreach ($needAbsoluteDir as $tips => $dir) {
             if (0 !== strpos($dir, '/')) {
@@ -268,7 +276,8 @@ class WalleController extends Controller {
      *
      * @param $projectId
      */
-    public function actionFileMd5($projectId, $file) {
+    public function actionFileMd5($projectId, $file)
+    {
         // 配置
         $this->conf = Project::getConf($projectId);
 
@@ -287,7 +296,8 @@ class WalleController extends Controller {
      *
      * @param $projectId
      */
-    public function actionGetBranch($projectId) {
+    public function actionGetBranch($projectId)
+    {
         $conf = Project::getConf($projectId);
 
         $version = Repo::getRevision($conf);
@@ -301,10 +311,11 @@ class WalleController extends Controller {
      *
      * @param $projectId
      */
-    public function actionGetCommitHistory($projectId, $branch = 'master') {
+    public function actionGetCommitHistory($projectId, $branch = 'master')
+    {
         $conf = Project::getConf($projectId);
         $revision = Repo::getRevision($conf);
-        if ($conf->repo_mode == Project::REPO_TAG && $conf->repo_type == Project::REPO_GIT) {
+        if ($conf->repo_mode == Project::REPO_MODE_TAG && $conf->repo_type == Project::REPO_GIT) {
             $list = $revision->getTagList();
         } else {
             $list = $revision->getCommitList($branch);
@@ -317,7 +328,8 @@ class WalleController extends Controller {
      *
      * @param $projectId
      */
-    public function actionGetCommitFile($projectId, $start, $end, $branch = 'trunk') {
+    public function actionGetCommitFile($projectId, $start, $end, $branch = 'trunk')
+    {
         $conf = Project::getConf($projectId);
         $revision = Repo::getRevision($conf);
         $list = $revision->getFileBetweenCommits($branch, $start, $end);
@@ -332,11 +344,12 @@ class WalleController extends Controller {
      * @return string
      * @throws \Exception
      */
-    public function actionDeploy($taskId) {
-        $this->task = Task::find()
-            ->where(['id' => $taskId])
-            ->with(['project'])
-            ->one();
+    public function actionDeploy($taskId)
+    {
+        $this->task = TaskModel::find()
+                               ->where(['id' => $taskId])
+                               ->with(['project'])
+                               ->one();
         if (!$this->task) {
             throw new \Exception(yii::t('walle', 'deployment id not exists'));
         }
@@ -354,12 +367,14 @@ class WalleController extends Controller {
      *
      * @param $taskId
      */
-    public function actionGetProcess($taskId) {
+    public function actionGetProcess($taskId)
+    {
         $record = Record::find()
-            ->select(['percent' => 'action', 'status', 'memo', 'command'])
-            ->where(['task_id' => $taskId,])
-            ->orderBy('id desc')
-            ->asArray()->one();
+                        ->select(['percent' => 'action', 'status', 'memo', 'command'])
+                        ->where(['task_id' => $taskId,])
+                        ->orderBy('id desc')
+                        ->asArray()
+                        ->one();
         $record['memo'] = stripslashes($record['memo']);
         $record['command'] = stripslashes($record['command']);
 
@@ -369,9 +384,11 @@ class WalleController extends Controller {
     /**
      * 产生一个上线版本
      */
-    private function _makeVersion() {
+    private function _makeVersion()
+    {
         $version = date("Ymd-His", time());
         $this->task->link_id = $version;
+
         return $this->task->save();
     }
 
@@ -382,10 +399,11 @@ class WalleController extends Controller {
      * @return bool
      * @throws \Exception
      */
-    private function _initWorkspace() {
+    private function _initWorkspace()
+    {
         $sTime = Command::getMs();
         // 本地宿主机工作区初始化
-        $this->walleFolder->initLocalWorkspace($this->task->link_id);
+        $this->walleFolder->initLocalWorkspace($this->task);
 
         // 远程目标目录检查，并且生成版本目录
         $ret = $this->walleFolder->initRemoteVersion($this->task->link_id);
@@ -393,7 +411,10 @@ class WalleController extends Controller {
         $duration = Command::getMs() - $sTime;
         Record::saveRecord($this->walleFolder, $this->task->id, Record::ACTION_PERMSSION, $duration);
 
-        if (!$ret) throw new \Exception(yii::t('walle', 'init deployment workspace error'));
+        if (!$ret) {
+            throw new \Exception(yii::t('walle', 'init deployment workspace error'));
+        }
+
         return true;
     }
 
@@ -403,7 +424,8 @@ class WalleController extends Controller {
      * @return bool
      * @throws \Exception
      */
-    private function _revisionUpdate() {
+    private function _revisionUpdate()
+    {
         // 更新代码文件
         $revision = Repo::getRevision($this->conf);
         $sTime = Command::getMs();
@@ -412,7 +434,10 @@ class WalleController extends Controller {
         $duration = Command::getMs() - $sTime;
         Record::saveRecord($revision, $this->task->id, Record::ACTION_CLONE, $duration);
 
-        if (!$ret) throw new \Exception(yii::t('walle', 'update code error'));
+        if (!$ret) {
+            throw new \Exception(yii::t('walle', 'update code error'));
+        }
+
         return true;
     }
 
@@ -423,14 +448,18 @@ class WalleController extends Controller {
      * @return bool
      * @throws \Exception
      */
-    private function _preDeploy() {
+    private function _preDeploy()
+    {
         $sTime = Command::getMs();
         $ret = $this->walleTask->preDeploy($this->task->link_id);
         // 记录执行时间
         $duration = Command::getMs() - $sTime;
         Record::saveRecord($this->walleTask, $this->task->id, Record::ACTION_PRE_DEPLOY, $duration);
 
-        if (!$ret) throw new \Exception(yii::t('walle', 'pre deploy task error'));
+        if (!$ret) {
+            throw new \Exception(yii::t('walle', 'pre deploy task error'));
+        }
+
         return true;
     }
 
@@ -442,14 +471,18 @@ class WalleController extends Controller {
      * @return bool
      * @throws \Exception
      */
-    private function _postDeploy() {
+    private function _postDeploy()
+    {
         $sTime = Command::getMs();
         $ret = $this->walleTask->postDeploy($this->task->link_id);
         // 记录执行时间
         $duration = Command::getMs() - $sTime;
         Record::saveRecord($this->walleTask, $this->task->id, Record::ACTION_POST_DEPLOY, $duration);
 
-        if (!$ret) throw new \Exception(yii::t('walle', 'post deploy task error'));
+        if (!$ret) {
+            throw new \Exception(yii::t('walle', 'post deploy task error'));
+        }
+
         return true;
     }
 
@@ -459,57 +492,23 @@ class WalleController extends Controller {
      * @return bool
      * @throws \Exception
      */
-    private function _transmission() {
-        if (Project::getAnsibleStatus()) {
-            // ansible copy
-            return $this->_ansibleCopy();
-        } else {
-            // 循环 rsync
-            return $this->_rsync();
-        }
-    }
-
-    /**
-     * ansible copy
-     *
-     * @return bool
-     * @throws \Exception
-     */
-    private function _ansibleCopy() {
-
-        $revision = Repo::getRevision($this->conf);
-        $files = $revision->getCommandFiles($this->task); // 更新到指定版本
+    private function _transmission()
+    {
 
         $sTime = Command::getMs();
-        $ret = $this->walleFolder->copyFiles($this->task->link_id, $files);
+
+        if (Project::getAnsibleStatus()) {
+            // ansible copy
+            $this->walleFolder->ansibleCopyFiles($this->conf, $this->task);
+        } else {
+            // 循环 scp
+            $this->walleFolder->scpCopyFiles($this->conf, $this->task);
+        }
+
+        // 记录执行时间
         $duration = Command::getMs() - $sTime;
+
         Record::saveRecord($this->walleFolder, $this->task->id, Record::ACTION_SYNC, $duration);
-        if (!$ret) {
-            throw new \Exception(yii::t('walle', 'rsync error'));
-        }
-
-        return true;
-    }
-
-    /**
-     * 同步文件到服务器
-     *
-     * @return bool
-     * @throws \Exception
-     */
-    private function _rsync() {
-
-        // 循环rsync传输
-        foreach (Project::getHosts() as $remoteHost) {
-            $sTime = Command::getMs();
-            $ret = $this->walleFolder->syncFiles($remoteHost, $this->task->link_id);
-            // 记录执行时间
-            $duration = Command::getMs() - $sTime;
-            Record::saveRecord($this->walleFolder, $this->task->id, Record::ACTION_SYNC, $duration);
-            if (!$ret) {
-                throw new \Exception(yii::t('walle', 'rsync error'));
-            }
-        }
 
         return true;
     }
@@ -518,11 +517,12 @@ class WalleController extends Controller {
      * 执行远程服务器任务集合
      * 对于目标机器更多的时候是一台机器完成一组命令，而不是每条命令逐台机器执行
      *
-     * @param string $version
+     * @param string  $version
      * @param integer $delay 每台机器延迟执行post_release任务间隔, 不推荐使用, 仅当业务无法平滑重启时使用
      * @throws \Exception
      */
-    private function _updateRemoteServers($version, $delay = 0) {
+    private function _updateRemoteServers($version, $delay = 0)
+    {
         $cmd = [];
         // pre-release task
         if (($preRelease = WalleTask::getRemoteTaskCommand($this->conf->pre_release, $version))) {
@@ -543,7 +543,10 @@ class WalleController extends Controller {
         // 记录执行时间
         $duration = Command::getMs() - $sTime;
         Record::saveRecord($this->walleTask, $this->task->id, Record::ACTION_UPDATE_REMOTE, $duration);
-        if (!$ret) throw new \Exception(yii::t('walle', 'update servers error'));
+        if (!$ret) {
+            throw new \Exception(yii::t('walle', 'update servers error'));
+        }
+
         return true;
     }
 
@@ -552,26 +555,32 @@ class WalleController extends Controller {
      *
      * @return int
      */
-    private function _enableRollBack() {
+    private function _enableRollBack()
+    {
         $where = ' status = :status AND project_id = :project_id ';
-        $param = [':status' => Task::STATUS_DONE, ':project_id' => $this->task->project_id];
-        $offset = Task::find()
-            ->select(['id'])
-            ->where($where, $param)
-            ->orderBy(['id' => SORT_DESC])
-            ->offset($this->conf->keep_version_num)->limit(1)
-            ->scalar();
-        if (!$offset) return true;
+        $param = [':status' => TaskModel::STATUS_DONE, ':project_id' => $this->task->project_id];
+        $offset = TaskModel::find()
+                           ->select(['id'])
+                           ->where($where, $param)
+                           ->orderBy(['id' => SORT_DESC])
+                           ->offset($this->conf->keep_version_num)
+                           ->limit(1)
+                           ->scalar();
+        if (!$offset) {
+            return true;
+        }
 
         $where .= ' AND id <= :offset ';
         $param[':offset'] = $offset;
-        return Task::updateAll(['enable_rollback' => Task::ROLLBACK_FALSE], $where, $param);
+
+        return TaskModel::updateAll(['enable_rollback' => TaskModel::ROLLBACK_FALSE], $where, $param);
     }
 
     /**
      * 只保留最大版本数，其余删除过老版本
      */
-    private function _cleanRemoteReleaseVersion() {
+    private function _cleanRemoteReleaseVersion()
+    {
         return $this->walleTask->cleanUpReleasesVersion();
     }
 
@@ -581,16 +590,19 @@ class WalleController extends Controller {
      * @param $version
      * @throws \Exception
      */
-    public function _rollback($version) {
+    public function _rollback($version)
+    {
         return $this->_updateRemoteServers($version);
     }
 
     /**
      * 收尾工作，清除宿主机的临时部署空间
      */
-    private function _cleanUpLocal($version = null) {
+    private function _cleanUpLocal($version = null)
+    {
         // 创建链接指向
         $this->walleFolder->cleanUpLocal($version);
+
         return true;
     }
 

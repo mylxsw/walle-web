@@ -58,9 +58,11 @@ class Project extends \yii\db\ActiveRecord
 
     const AUDIT_NO = 2;
 
-    const REPO_BRANCH = 'branch';
+    const REPO_MODE_BRANCH = 'branch';
 
-    const REPO_TAG = 'tag';
+    const REPO_MODE_TAG = 'tag';
+
+    const REPO_MODE_NONTRUNK = 'nontrunk';
 
     const REPO_GIT = 'git';
 
@@ -218,6 +220,27 @@ class Project extends \yii\db\ActiveRecord
         return sprintf("%s/%s/%s", rtrim($from, '/'), rtrim($env, '/'), $project);
     }
 
+    /**
+     * 拼接宿主机的SVN仓库目录(带branches/tags目录)
+     *
+     * @param string $branchName
+     * @return string
+     */
+    public static function getSvnDeployBranchFromDir($branchName = 'trunk') {
+
+        $deployFromDir = static::getDeployFromDir();
+        if ($branchName == '') {
+            $branchFromDir = $deployFromDir;
+        } elseif ($branchName == 'trunk') {
+            $branchFromDir = sprintf('%s/trunk', $deployFromDir);
+        } elseif (static::$CONF->repo_mode == static::REPO_MODE_BRANCH) {
+            $branchFromDir = sprintf('%s/branches/%s', $deployFromDir, $branchName);
+        } elseif (static::$CONF->repo_mode == static::REPO_MODE_TAG) {
+            $branchFromDir = sprintf('%s/tags/%s', $deployFromDir, $branchName);
+        }
+
+        return $branchFromDir;
+    }
 
     /**
      * 获取目标机要发布的目录
@@ -320,4 +343,5 @@ class Project extends \yii\db\ActiveRecord
         // 删除本地目录
 
     }
+
 }

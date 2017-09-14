@@ -17,6 +17,7 @@ $userName =  \Yii::$app->user->id ? $user->getName() : '';
 <html lang="en">
 <head>
     <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" name="viewport">
     <title><?= Html::encode($this->title) ?> - <?= yii::t('w', 'walle') ?></title>
     <link href="<?= Url::to('@web/dist/css/bootstrap.min.css') ?>" rel="stylesheet" />
     <link href="<?= Url::to('@web/dist/css/font-awesome.min.css') ?>" rel="stylesheet" />
@@ -67,13 +68,13 @@ $userName =  \Yii::$app->user->id ? $user->getName() : '';
     </script>
 
     <div class="navbar-container" id="navbar-container">
-        <div class="navbar-header pull-left">
+        <div class="pull-left">
             <a href="javascript:;" class="navbar-brand">
                 <small>Walle</small>
             </a><!-- /.brand -->
         </div><!-- /.navbar-header -->
 
-        <div class="navbar-header pull-right" role="navigation">
+        <div class="pull-right" role="navigation">
             <ul class="nav ace-nav">
                 <?php if (GlobalHelper::isValidAdmin() && ($count = count(User::getInactiveAdminList()))) { ?>
                 <li class="light-blue">
@@ -218,27 +219,21 @@ $userName =  \Yii::$app->user->id ? $user->getName() : '';
                         </span>
                     </a>
                 </li>
-                <li>
+                <li <?= \Yii::$app->controller->id == 'user' ? ' class="active open"' : '' ?>>
                     <a href="#" class="dropdown-toggle">
                         <i class="icon-group"></i>
-                        <span class="menu-text"> 用户管理 </span>
+                        <span class="menu-text"><?= yii::t('w', 'manage_user') ?></span>
 
                         <b class="arrow icon-angle-down"></b>
                     </a>
-
-                    <ul class="submenu" style="display: none;">
-                        <li>
+                    <ul class="submenu">
+                        <li <?= \Yii::$app->controller->id == 'user' && \Yii::$app->controller->action->id == 'list' ? 'class="active"' : '' ?>>
                             <a href="<?= Url::to('@web/user/list') ?>">
-                                <i class="icon-double-angle-right"></i>
-                                用户列表
-                            </a>
+                                <i class="icon-double-angle-right"></i><?= yii::t('w', 'users_list') ?></a>
                         </li>
-
-                        <li>
+                        <li <?= \Yii::$app->controller->id == 'user' && \Yii::$app->controller->action->id == 'add' ? 'class="active"' : '' ?>>
                             <a href="<?= Url::to('@web/user/add') ?>">
-                                <i class="icon-double-angle-right"></i>
-                                添加用户
-                            </a>
+                                <i class="icon-double-angle-right"></i><?= yii::t('w', 'add_users') ?></a>
                         </li>
                     </ul>
                 </li>
@@ -351,7 +346,6 @@ $userName =  \Yii::$app->user->id ? $user->getName() : '';
 
     })
 </script>
-    <?php $this->endBody() ?>
 
   </body>
 </html>
